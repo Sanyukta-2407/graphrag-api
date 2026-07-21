@@ -81,7 +81,7 @@ Text:
 """
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="openai/gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
@@ -126,7 +126,7 @@ Return ONLY JSON.
 """
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="openai/gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
@@ -170,7 +170,7 @@ Return ONLY JSON.
 """
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="openai/gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
