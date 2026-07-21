@@ -10,7 +10,7 @@ app = FastAPI(title="GraphRAG API")
 
 client = OpenAI(
     api_key=os.getenv("AIPIPE_TOKEN"),
-    base_url="https://aipipe.org/openrouter/v1",
+    base_url="https://aipipe.org/openai/v1",
 )
 
 
