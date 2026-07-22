@@ -1,19 +1,28 @@
-import json
 import os
-from typing import Dict, List
+import json
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
 from openai import OpenAI
 
-app = FastAPI(title="GraphRAG API")
+load_dotenv()
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 client = OpenAI(
     api_key=os.getenv("AIPIPE_TOKEN"),
     base_url="https://aipipe.org/openai/v1",
 )
-
-
 class ExtractRequest(BaseModel):
     chunk_id: str
     text: str
@@ -21,74 +30,53 @@ class ExtractRequest(BaseModel):
 
 class GraphQueryRequest(BaseModel):
     question: str
-    graph: Dict
+    graph: dict
 
 
 class CommunityRequest(BaseModel):
     community_id: str
-    entities: List[str]
-    relationships: List[Dict]
-
-
-@app.get("/")
-def root():
-    return {
-        "status": "ok",
-        "service": "GraphRAG API"
-    }
-
-
+    entities: list[str]
+    relationships: list[dict]
 @app.post("/extract-graph")
-def extract_graph(req: ExtractRequest):
-    try:
-        prompt = f"""
+def extract_graph(request: ExtractRequest):
+    prompt = f"""
 Extract entities and relationships from the text.
 
-Allowed entity types:
-Person
-Organization
-Product
-Framework
+Entity types:
+- Person
+- Organization
+- Product
+- Framework
 
-Allowed relationship types:
-FOUNDED
-DEVELOPED
-INTEGRATED_INTO
-HIRED
-AUTHORED
-CREATED
+Relationship types:
+- FOUNDED
+- DEVELOPED
+- INTEGRATED_INTO
+- HIRED
+- AUTHORED
+- CREATED
 
-Return ONLY valid JSON.
+Return ONLY valid JSON in this format:
 
 {{
-  "entities":[
-    {{
-      "name":"",
-      "type":""
-    }}
+  "entities": [
+    {{"name":"...","type":"..."}}
   ],
-  "relationships":[
-    {{
-      "source":"",
-      "target":"",
-      "relation":""
-    }}
+  "relationships": [
+    {{"source":"...","target":"...","relation":"..."}}
   ]
 }}
 
 Text:
-{req.text}
+{request.text}
 """
 
+    try:
         response = client.chat.completions.create(
-            model="openai/gpt-4.1-mini",
+            model="gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": "You extract knowledge graphs."
-                },
                 {
                     "role": "user",
                     "content": prompt
@@ -100,40 +88,34 @@ Text:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/graph-query")
-def graph_query(req: GraphQueryRequest):
-    try:
-        prompt = f"""
-You are a GraphRAG reasoning engine.
+def graph_query(request: GraphQueryRequest):
+    prompt = f"""
+You are given a knowledge graph.
 
-Question:
+Answer the question using ONLY the graph.
 
-{req.question}
+Return ONLY valid JSON in this format:
+
+{{
+  "answer": "...",
+  "reasoning_path": ["node1", "node2"],
+  "hops": 2
+}}
 
 Knowledge Graph:
+{json.dumps(request.graph, indent=2)}
 
-{json.dumps(req.graph)}
-
-Return ONLY JSON.
-
-{{
-    "answer":"",
-    "reasoning_path":[],
-    "hops":0
-}}
+Question:
+{request.question}
 """
 
+    try:
         response = client.chat.completions.create(
-            model="openai/gpt-4.1-mini",
+            model="gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": "Answer questions using graph reasoning."
-                },
                 {
                     "role": "user",
                     "content": prompt
@@ -145,39 +127,33 @@ Return ONLY JSON.
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/community-summary")
-def community_summary(req: CommunityRequest):
-    try:
-        prompt = f"""
-Summarize this graph community.
+def community_summary(request: CommunityRequest):
+    prompt = f"""
+You are given a graph community.
 
-Entities:
+Write a concise summary using only the provided entities and relationships.
 
-{json.dumps(req.entities)}
-
-Relationships:
-
-{json.dumps(req.relationships)}
-
-Return ONLY JSON.
+Return ONLY valid JSON in this format:
 
 {{
-    "community_id":"{req.community_id}",
-    "summary":""
+  "community_id": "{request.community_id}",
+  "summary": "..."
 }}
+
+Entities:
+{json.dumps(request.entities, indent=2)}
+
+Relationships:
+{json.dumps(request.relationships, indent=2)}
 """
 
+    try:
         response = client.chat.completions.create(
-            model="openai/gpt-4.1-mini",
+            model="gpt-4.1-mini",
             temperature=0,
             response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": "Summarize graph communities."
-                },
                 {
                     "role": "user",
                     "content": prompt
@@ -186,7 +162,7 @@ Return ONLY JSON.
         )
 
         result = json.loads(response.choices[0].message.content)
-        result["community_id"] = req.community_id
+        result["community_id"] = request.community_id
         return result
 
     except Exception as e:
